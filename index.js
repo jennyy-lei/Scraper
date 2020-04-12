@@ -6,7 +6,6 @@ router.use(bodyParser.urlencoded({ extended: true }));
 router.use(bodyParser.json());
 
 const app = express();
-const port = 3000;
 
 const scraper = require ('./scraper.js');
 
@@ -20,6 +19,12 @@ app.get('/', function(req, res){
             console.log("Fail to get data!");
         })
 });
+
+let port = process.env.PORT;
+
+if (port == null || port == "") {
+  port = 8000;
+}
 
 app.listen(port, () => {
     console.log(`API is running on http://localhost:${port}`);
