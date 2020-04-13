@@ -7,15 +7,15 @@ const get_data = function() {
 		uri: "https://www.ctvnews.ca/health/coronavirus/tracking-every-case-of-covid-19-in-canada-1.4852102",
 	}
 
-	const graph = {
+	const excel = {
 		method: 'GET',
-		uri: "https://beta.ctvnews.ca/content/dam/common/exceltojson/COVID-19%20Canada.txt",
+		uri: "https://beta.ctvnews.ca/content/dam/common/exceltojson/COVID-19-Canada-New.txt",
 	}
 
 	return rp(site).then((parsedBody) => {
 		const bdy = cheerio.load(parsedBody);
 
-		return rp(graph).then((str) => {
+		return rp(excel).then((str) => {
 			const json = JSON.parse(str);
 
 			return {
@@ -32,48 +32,21 @@ const get_data = function() {
 const format_data = function(json) {
 	let data = [];
 
-	let minDate = maxDate = Number(json[0].date_start);
-
-	json.forEach((person, i) => {
-		if(!person.date_start) {
+	json.forEach((day, i, N) => {
+		if(!day.Date) {
 			return;
 		}
-
-		minDate = Number(person.date_start) < minDate ? Number(person.date_start) : minDate;
-		maxDate = Number(person.date_start) > maxDate ? Number(person.date_start) : maxDate;
-	})
-
-	console.log(minDate);
-
-	for (let i = minDate; i <= maxDate; ++i) {
-        data.push({
-			date: to_date(i),
-			dateNum: i,
-			new: 0,
-			cumulative: 0,
-			provinceData: init_prov(),
-        })
-	}
-
-	json.forEach((person) => {
-		let date = data.find(day => day.dateNum === Number(person.date_start));
-		if(date) {
-			++date.new;
-
-			let province = date.provinceData.find(province => province.name === person.province);
-			if(province) {
-				++province.new;
-			}
-		}
-	})
-	  
-	data.forEach((day, i) => {
-		day.cumulative = day.new + (i === 0 ? 0 : data[i-1].cumulative);
-
-		day.provinceData.forEach((province, ind) => {
-			province.cumulative = province.new + (i === 0 ? 0 : data[i-1].provinceData[ind].cumulative);
+		
+		let newCases = i == 0 ? 0 : Number(N[i].Can_Total - N[i -1].Can_Total);
+		
+		data.push({
+			date: to_date(Number(day.Date)),
+			new: newCases,
+			cumulative: Number(day.Can_Total),
+			recovered: Number(day.Can_Recovered),
+			deaths: Number(day.Can_Death),
+			provinceData: init_prov(day, i == 0 ? null : N[i-1]),
 		})
-        // cumulative += day.new;
 	})
   
 	return data;
@@ -83,30 +56,36 @@ const to_date = function(excelDate) {
 	return new Date((excelDate - (25567 + 2))*86400*1000);
 }
 
-const init_prov = function() {
+const init_prov = function(data, prevDay) {
 	const provinceNames = [
-		"British Columbia",
-		"Alberta",
-		"Saskatchewan",
-		"Manitoba",
-		"Ontario",
-		"Quebec",
-		"New Brunswick",
-		"Nova Scotia",
-		"Prince Edward Island",
-		"Newfoundland and Labrador",
-		"Yukon",
-		"Northwest Territories",
-		"Nunavut"
+		{short:'BC', long:'British Columbia'},
+		{short:'AB', long:'Alberta'},
+		{short:'SK', long:'Saskatchewan'},
+		{short:'MB', long:'Manitoba'},
+		{short:'ON', long:'Ontario'},
+		{short:'QC', long:'Quebec'},
+		{short:'NB', long:'New Brunswick'},
+		{short:'NS', long:'Nova Scotia'},
+		{short:'PE', long:'Prince Edward Island'},
+		{short:'NL', long:'Newfoundland and Labrador'},
+		{short:'YT', long:'Yukon'},
+		{short:'NT', long:'Northwest Territories'},
+		{short:'NU', long:'Nunavut'}
 	];
+
+	let newCases = 0;
 
 	let obj = [];
 
 	for (name of provinceNames) {
+		newCases = !prevDay ? 0 : Number(data[`${name.short}_Total`] - prevDay[`${name.short}_Total`]);
+
 		obj.push({
-			name: name,
-			new: 0,
-			cumulative: 0,
+			name: name.long,
+			new: newCases <= 0 ? 0 : newCases,
+			cumulative: Number(data[`${name.short}_Total`]),
+			recovered: Number(data[`${name.short}_Recovered`]),
+			deaths: Number(data[`${name.short}_Death`]),
 		})
 	}
 
